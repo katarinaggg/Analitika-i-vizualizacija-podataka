@@ -1,0 +1,233 @@
+---
+title: "Analitika i vizualizacija podataka 2026 - Domaći 1"
+author: "Katarina Gordić 41/2023 RN"
+output:
+  html_document: default
+  github_document: default
+date: "2026-04-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# "Da li se isplati čekati? Veza između godina iskustva i plate profesora"
+
+
+## 1. Uvod
+
+Kada neko provede decenije na fakultetu — predajući, istražujući, pišući — prirodno je očekivati da se to odrazi i na visinu plate. Ipak, postavlja se pitanje da li plate zaista kontinuirano rastu sa godinama iskustva, ili se nakon određenog perioda taj rast usporava ili čak zaustavlja.
+
+U ovom radu istražujem sledeće pitanje: da li se plate profesora statistički značajno razlikuju u zavisnosti od nivoa radnog iskustva? Konkretno, posmatram tri grupe zaposlenih — profesore sa do 10 godina staža, sa 10 do 25 godina i sa više od 25 godina iskustva — kako bih utvrdila da li između njih postoje jasne razlike u zaradama.
+
+Ovo pitanje je zanimljivo jer daje uvid u to kako funkcioniše sistem formiranja plata na jednom američkom univerzitetu. Ukoliko se pokaže da plate rastu sa iskustvom, to bi ukazivalo na to da se dugogodišnji rad i napredovanje prepoznaju i vrednuju. Sa druge strane, ako se razlike između grupa ne pokažu kao značajne ili ako se rast plata zaustavlja nakon određenog nivoa iskustva, to može značiti da na visinu zarade utiču i drugi faktori, a ne samo godine rada.
+
+Analiza se zasniva na datasetu Salaries iz paketa carData, koji sadrži podatke o 397 profesora na jednom američkom univerzitetu, uključujući njihove plate, akademski rang, disciplinu i godine iskustva. Kako promenljiva koja predstavlja godine radnog staža ima kontinualne vrednosti, za potrebe ove analize podeljena je u tri kategorije (0–10, 10–25 i 25+ godina), koje odgovaraju različitim fazama karijere i omogućavaju jednostavnije poređenje između grupa. Ova podela je izabrana tako da svaka grupa sadrži dovoljan broj podataka, iako treba imati u vidu da se time gubi deo informacije o tačnoj vrednosti iskustva.
+
+
+## 2. Učitavanje i pregled podataka
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+library(carData)
+data("Salaries")
+
+head(Salaries)
+
+```
+
+### Kategorizacija godina iskustva
+
+```{r}
+# godine iskustva svrstavam u 3 grupe 
+Salaries$exp_group <- cut(Salaries$yrs.service,
+                         breaks = c(0, 10, 25, 60),
+                         labels = c("0-10", "10-25", "25+"),
+                         include.lowest = TRUE)
+
+table(Salaries$exp_group)
+```
+### Deskriptivna statistika
+
+```{r}
+summary(Salaries[, c("salary", "yrs.service", "exp_group")])
+```
+
+```{r}
+# statistika plata po grupama iskustva
+Salaries %>%
+  group_by(exp_group) %>%
+  summarise(
+    n = n(),
+    mean_salary = round(mean(salary)),
+    sd_salary   = round(sd(salary)),
+    min_salary  = min(salary),
+    max_salary  = max(salary)
+  )
+
+```
+Na osnovu prikazanih rezultata može se uočiti da prosečna plata raste sa porastom nivoa iskustva, ali ne u potpunosti linearno. Najviša prosečna plata zabeležena je u grupi sa 10–25 godina iskustva, dok je u grupi sa više od 25 godina nešto niža. Ovo može ukazivati na to da rast plate usporava nakon određenog nivoa iskustva.
+
+Takođe se primećuje da standardna devijacija raste sa iskustvom, što znači da su razlike u platama veće među iskusnijim zaposlenima. Minimalne i maksimalne vrednosti dodatno potvrđuju veću raspršenost plata u grupi sa najviše iskustva.
+
+### GRAFIKON: Plate u odnosu na nivo iskustva
+
+```{r}
+# box plot za poredjenje medijana, raspona i ekstremnih vrednosti plata izmedju grupa iskustava
+ggplot(Salaries, aes(x = exp_group, y = salary)) +
+  geom_boxplot(fill = "#5a9fc9")+
+  scale_y_continuous(labels = scales::dollar_format()) +
+  labs(title = "Plate u odnosu na nivo iskustva",
+       x = "Godine iskustva",
+       y = "Godišnja plata (USD)") +
+  theme(legend.position = "none")
+```
+
+Sa grafikona se može jasno uočiti da plate rastu sa porastom godina iskustva. Medijana plate je najniža u grupi sa 0–10 godina iskustva, dok je viša u grupama sa većim stažom. Međutim, razlika između grupa sa 10–25 i 25+ godina iskustva nije izražena u istoj meri, što ukazuje na to da rast plata usporava nakon određenog nivoa iskustva.
+
+Takođe se primećuje da je varijabilnost plata veća u grupama sa više iskustva, posebno u grupi sa preko 25 godina staža, gde se javlja i najveći raspon vrednosti. U grupi sa najmanje iskustva uočava se veći broj ekstremnih vrednosti (outlier-a), što može ukazivati na pojedince sa natprosečno visokim platama u ranoj fazi karijere.
+
+### GRAFIKON: Raspodela plata
+```{r}
+# histogram za opstu raspodelu plata 
+# sluzi da procenim da li podaci izgledaju priblizno normalno
+ggplot(Salaries, aes(x = salary)) +
+  geom_histogram(bins = 30, fill = "#5a9fc9", color = "black") +
+  scale_x_continuous(labels = scales::dollar_format()) +
+  labs(title = "Raspodela plata",
+       x = "Godišnja plata (USD)",
+       y = "Broj zaposlenih")
+```
+
+Raspodela plata je asimetrična i blago nagnuta udesno, što znači da većina zaposlenih ima plate u nižem i srednjem opsegu, dok manji broj ima veoma visoke plate. Najveća koncentracija vrednosti nalazi se približno između 80.000 i 130.000 USD, dok se prema višim vrednostima broj zaposlenih postepeno smanjuje.
+
+Prisustvo manjih frekvencija na desnoj strani grafikona ukazuje na postojanje nekoliko veoma visokih plata koje produžavaju rep raspodele. Ovakav oblik raspodele sugeriše da podaci verovatno ne prate normalnu raspodelu, što će biti važno prilikom izbora statističkog testa u nastavku analize.
+
+
+## 3. Provera pretpostavki
+
+### Raspodela plata po grupama iskustva
+
+```{r}
+# histogram
+# raspodele plata po grupama
+ggplot(Salaries, aes(x = salary)) +
+  geom_histogram(bins = 20, fill = "#5a9fc9", color = "black") +
+  facet_wrap(~exp_group) +
+  labs(title = "Raspodela godišnjih plata po godinama iskustva",
+       x = "Godišnja plata (USD)",
+       y = "Broj zaposlenih")
+```
+
+Na osnovu grafikona može se uočiti da raspodela plata nije ista u svim grupama iskustva. U grupama sa 0–10 i 25+ godina iskustva prisutna je blaga asimetrija ka višim vrednostima, odnosno duži desni rep, što znači da manji broj zaposlenih ima znatno veće plate od većine.
+
+Sa druge strane, raspodela u srednjoj grupi (10–25 godina iskustva) deluje približno simetrično i bliža je normalnoj raspodeli. Ipak, s obzirom na to da u svim grupama ne važi isti oblik raspodele, ne može se pretpostaviti da podaci u celini prate normalnu raspodelu.
+
+Takođe se primećuje da je raspodela najšira u grupi sa najviše iskustva, što ukazuje na veću raznolikost plata među iskusnijim zaposlenima.
+
+
+### QQ plot po grupama
+
+```{r}
+# qq plot za vizuelnu proveru koliko raspodela u svakoj grupi odstupa od normalne
+ggplot(Salaries, aes(sample = salary)) +
+  stat_qq(color = "#5a9fc9") +
+  stat_qq_line(color = "black", linetype = "dashed") +
+  facet_wrap(~exp_group) +
+  theme_minimal() +
+  labs(
+    title = "QQ plot godišnjih plata po grupama godina iskustva",
+    x = "Teorijski kvantili",
+    y = "Kvantili uzorka"
+  )
+```
+
+QQ plotovi potvrđuju ono što smo videli na histogramima. Može se uočiti da tačke ne prate idealno pravu liniju, posebno na krajevima raspodele, gde dolazi do značajnih odstupanja. Ova odstupanja su izraženija kod većih vrednosti plata, što ukazuje na prisustvo ekstremnih vrednosti.
+
+Takvo ponašanje tačaka potvrđuje da raspodela plata u posmatranim grupama odstupa od normalne raspodele, naročito u repovima raspodele.
+
+
+### Shapiro-Wilk test
+
+```{r}
+# formalna provera normalnosti raspodele unutar svake grupe
+Salaries %>%
+  group_by(exp_group) %>%
+  summarise(
+    shapiro_stat = shapiro.test(salary)$statistic,
+    shapiro_p    = shapiro.test(salary)$p.value
+  )
+```
+Rezultati Shapiro-Wilk testa pokazuju da u grupama sa 0–10 i 25+ godina iskustva p-vrednosti iznose manje od 0.05, što znači da se odbacuje pretpostavka o normalnoj raspodeli. Iako grupa sa 10–25 godina iskustva ne pokazuje statistički značajno odstupanje od normalnosti, to nije slučaj za sve grupe.
+
+Na osnovu vizuelnih prikaza i rezultata Shapiro-Wilk testa može se zaključiti da raspodela plata ne prati normalnu raspodelu u svim grupama iskustva. S obzirom na to da pretpostavka normalnosti nije ispunjena za sve grupe, nije opravdano koristiti ANOVA test.
+
+Zbog toga će u nastavku analize biti primenjen Kruskal-Wallis test, koji ne zahteva pretpostavku normalne raspodele i predstavlja adekvatan izbor za poređenje više grupa u ovom slučaju.
+
+
+## 4. Analiza
+
+### Statistički test
+
+```{r}
+kruskal.test(salary ~ exp_group, data = Salaries)
+```
+Rezultati Kruskal-Wallis testa pokazuju da postoji statistički značajna razlika u platama profesora između grupa sa različitim nivoima iskustva (p < 0.001), što ukazuje na to da razlika nije slučajna i da godine iskustva imaju značajan uticaj na visinu plate na posmatranom univerzitetu
+
+
+```{r, message=FALSE}
+# scatter plot + trend linija
+ggplot(Salaries, aes(x = yrs.service, y = salary)) +
+  # tecke -> profesori
+  geom_point(alpha = 0.2, color = "gray50", size = 1.5) +
+  # loess line (Locally Estimated Scatterplot Smoothing) 
+  geom_smooth(method = "loess", color = "#1a5f8a",
+              fill = "#a8c5da", linewidth = 1.2) +
+  # vertikalne linije za granice grupa
+  geom_vline(xintercept = c(10, 25), color = "#5a9fc9",
+             linetype = "dashed", linewidth = 0.6) +
+  # labele grupa
+  annotate("text", x = 5, y = 228000, label = "Početnici\n(0-10)",
+           color = "#5a9fc9", fontface = "bold", size = 3.5) +
+  annotate("text", x = 17.5, y = 228000, label = "Srednja karijera\n(10-25)",
+           color = "#5a9fc9", fontface = "bold", size = 3.5) +
+  annotate("text", x = 42, y = 228000, label = "Iskusni\n(25+)",
+           color = "#5a9fc9", fontface = "bold", size = 3.5) +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  scale_x_continuous(breaks = c(0, 10, 25, 40, 60)) +
+  labs(
+    title = "Plate brzo rastu u ranoj karijeri, a zatim se stabilizuju",
+    subtitle = "Svaka tačka je jedan profesor | Linija prikazuje opšti trend | Osenčena plava zona = interval poverenja",
+    x = "Godine radnog iskustva",
+    y = "Godišnja plata (USD)",
+    caption = "Izvor: Salaries dataset, carData paket | Kruskal-Wallis test: H = 97.86, p < 0.001"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_line(color = "gray95"),
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(color = "gray40", size = 9),
+    plot.caption = element_text(color = "gray50", size = 8)
+  )
+```
+
+Grafikon prikazuje odnos između godina radnog iskustva i visine plate, pri čemu svaka tačka predstavlja jednog profesora, dok linija prikazuje opšti trend kretanja plata. Važno je napomenuti da je grafik zasnovan na kontinuiranim vrednostima godina iskustva, a ne na prethodno definisanim kategorijama, čime se omogućava uočavanje finijih obrazaca u podacima. Može se uočiti da plate u početnim fazama karijere brzo rastu, ali da se nakon približno 15–20 godina taj rast usporava i prelazi u stabilizaciju.
+
+Ovakav obrazac je u skladu sa rezultatima Kruskal-Wallis testa, koji je pokazao da postoji statistički značajna razlika u platama između grupa sa različitim nivoima iskustva. Na grafikonu se jasno vidi da razlike između grupa zaista postoje, ali i da nisu potpuno linearne, odnosno da se rast plata ne nastavlja istim intenzitetom u kasnijim fazama karijere.
+
+
+## 5. Zaključak
+
+
+Na osnovu sprovedene analize može se zaključiti da godine radnog iskustva imaju značajan uticaj na visinu plate profesora, ali taj uticaj nije linearan. Plate najbrže rastu u ranim fazama karijere, dok se nakon približno 15–20 godina taj rast usporava i prelazi u stabilizaciju. Ovo se jasno vidi i u grupnoj analizi, gde grupa sa 10–25 godina iskustva ima najvišu prosečnu platu, dok se u grupi sa više od 25 godina ne uočava dalje povećanje, već blagi pad prosečne vrednosti. Rezultati Kruskal-Wallis testa potvrđuju da razlike između grupa postoje i da nisu slučajne (p < 0.001), ali grafička analiza pokazuje da se rast plata ne nastavlja istim intenzitetom kroz čitavu karijeru. Drugim rečima, iskustvo se isplati do određenog nivoa, ali nakon srednje faze karijere dodatne godine rada ne donose proporcionalno veću zaradu.
+
+
+Ipak, ova analiza ima određena ograničenja. Podaci se odnose na jedan univerzitet i ne uzimaju u obzir faktore kao što su akademski rang, disciplina ili individualni učinak, koji mogu značajno uticati na visinu plate, posebno kod iskusnijih profesora gde je uočena velika varijabilnost. Takođe, kategorizacija kontinuirane promenljive iskustva može sakriti finije obrasce u podacima. U budućim istraživanjima bilo bi korisno uključiti ove dodatne faktore i analizirati veći i raznovrsniji skup podataka, kako bi se preciznije ispitalo zašto se rast plata usporava u kasnijim fazama karijere, kao i istražiti da li isti obrazac važi i u drugim institucijama.
+
